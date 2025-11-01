@@ -15,7 +15,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final nameController = TextEditingController();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
-  final baseUrl = 'http://<your-ip>:8000/api/register'; // Change IP
+  final baseUrl = 'http://127.0.0.1:8000/api/register'; // Change IP
 
   Future<void> register() async {
     final response = await http.post(

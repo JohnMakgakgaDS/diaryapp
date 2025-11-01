@@ -15,7 +15,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
-  final baseUrl = 'http://<your-ip>:8000/api/login'; // Change your IP
+  final baseUrl = 'http://http://127.0.0.1:8000/api/login'; // Change your IP
 
   Future<void> login() async {
     final response = await http.post(

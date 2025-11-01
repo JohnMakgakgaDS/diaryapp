@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-import 'lib.dart';
 import 'package:table_calendar/table_calendar.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'login_screen.dart';
+import 'dart:convert';
 
 class DiaryHomePage extends StatefulWidget {
   const DiaryHomePage({super.key});
@@ -14,144 +11,121 @@ class DiaryHomePage extends StatefulWidget {
 }
 
 class _DiaryHomePageState extends State<DiaryHomePage> {
+  CalendarFormat _calendarFormat = CalendarFormat.month;
   DateTime _selectedDay = DateTime.now();
-  List _entries = [];
-
-  final String baseUrl = 'http://<your-ip>:8000/api/entries'; // change IP
+  DateTime _focusedDay = DateTime.now();
+  Map<String, List<String>> _entries = {}; // key = yyyy-MM-dd, value = list of entries
+  final TextEditingController _textController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    fetchEntries();
+    _loadEntries();
   }
 
-  Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('token');
-  }
-
-  Future<void> fetchEntries() async {
-    final token = await getToken();
-    final response = await http.get(
-      Uri.parse('$baseUrl?date=${_selectedDay.toIso8601String().split("T")[0]}'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
-    if (response.statusCode == 200) {
+  Future<void> _loadEntries() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? data = prefs.getString('diary_entries');
+    if (data != null) {
       setState(() {
-        _entries = json.decode(response.body);
+        _entries = Map<String, List<String>>.from(
+          (jsonDecode(data) as Map).map(
+            (key, value) => MapEntry(key, List<String>.from(value)),
+          ),
+        );
       });
     }
   }
 
-  Future<void> addEntry(String title, String type) async {
-    final token = await getToken();
-    final response = await http.post(
-      Uri.parse(baseUrl),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: json.encode({
-        'date': _selectedDay.toIso8601String().split("T")[0],
-        'title': title,
-        'description': '',
-        'type': type,
-      }),
-    );
-    if (response.statusCode == 201) fetchEntries();
+  Future<void> _saveEntries() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setString('diary_entries', jsonEncode(_entries));
   }
 
-  Future<void> logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
-    await http.post(
-      Uri.parse('http://<your-ip>:8000/api/logout'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
-    await prefs.remove('token');
-    if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-      );
-    }
+  List<String> _getEntriesForDay(DateTime day) {
+    return _entries[day.toIso8601String().substring(0, 10)] ?? [];
   }
 
-  void _showAddDialog() {
-    String newTitle = '';
-    String type = 'todo';
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Add Entry'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(onChanged: (val) => newTitle = val, decoration: const InputDecoration(labelText: 'Title')),
-            DropdownButton<String>(
-              value: type,
-              items: const [
-                DropdownMenuItem(value: 'todo', child: Text('To-Do')),
-                DropdownMenuItem(value: 'event', child: Text('Event')),
-              ],
-              onChanged: (val) => setState(() => type = val!),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              addEntry(newTitle, type);
-              Navigator.pop(context);
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
+  void _addEntry() {
+    String text = _textController.text.trim();
+    if (text.isEmpty) return;
+
+    String key = _selectedDay.toIso8601String().substring(0, 10);
+    setState(() {
+      if (_entries.containsKey(key)) {
+        _entries[key]!.add(text);
+      } else {
+        _entries[key] = [text];
+      }
+      _textController.clear();
+      _saveEntries();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final entries = _getEntriesForDay(_selectedDay);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Diary'),
-        actions: [
-          IconButton(
-            onPressed: logout,
-            icon: const Icon(Icons.logout),
-          ),
-        ],
+        title: const Text('Diary Home'),
       ),
       body: Column(
         children: [
           TableCalendar(
-            focusedDay: _selectedDay,
-            firstDay: DateTime(2020),
-            lastDay: DateTime(2030),
-            selectedDayPredicate: (day) => isSameDay(day, _selectedDay),
-            onDaySelected: (selectedDay, _) {
-              setState(() => _selectedDay = selectedDay);
-              fetchEntries();
+            firstDay: DateTime.utc(2000, 1, 1),
+            lastDay: DateTime.utc(2100, 12, 31),
+            focusedDay: _focusedDay,
+            calendarFormat: _calendarFormat,
+            selectedDayPredicate: (day) {
+              return isSameDay(_selectedDay, day);
+            },
+            onDaySelected: (selectedDay, focusedDay) {
+              setState(() {
+                _selectedDay = selectedDay;
+                _focusedDay = focusedDay;
+              });
+            },
+            onFormatChanged: (format) {
+              setState(() {
+                _calendarFormat = format;
+              });
             },
           ),
+          const SizedBox(height: 8),
           Expanded(
             child: ListView.builder(
-              itemCount: _entries.length,
+              itemCount: entries.length,
               itemBuilder: (context, index) {
-                final entry = _entries[index];
                 return ListTile(
-                  title: Text(entry['title']),
-                  subtitle: Text(entry['type']),
+                  title: Text(entries[index]),
                 );
               },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _textController,
+                    decoration: const InputDecoration(
+                      hintText: 'Add a diary entry',
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.add),
+                  onPressed: _addEntry,
+                ),
+              ],
             ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showAddDialog,
+        onPressed: _addEntry,
         child: const Icon(Icons.add),
       ),
     );
