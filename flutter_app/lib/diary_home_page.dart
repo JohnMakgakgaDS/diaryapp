@@ -1,3 +1,4 @@
+// lib/diary_home_page.dart
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,14 +8,14 @@ class DiaryHomePage extends StatefulWidget {
   const DiaryHomePage({super.key});
 
   @override
-  _DiaryHomePageState createState() => _DiaryHomePageState();
+  State<DiaryHomePage> createState() => _DiaryHomePageState();
 }
 
 class _DiaryHomePageState extends State<DiaryHomePage> {
   CalendarFormat _calendarFormat = CalendarFormat.month;
   DateTime _selectedDay = DateTime.now();
   DateTime _focusedDay = DateTime.now();
-  Map<String, List<String>> _entries = {}; // key = yyyy-MM-dd, value = list of entries
+  Map<String, List<String>> _entries = {};
   final TextEditingController _textController = TextEditingController();
 
   @override
@@ -24,8 +25,8 @@ class _DiaryHomePageState extends State<DiaryHomePage> {
   }
 
   Future<void> _loadEntries() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? data = prefs.getString('diary_entries');
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final String? data = prefs.getString('diary_entries');
     if (data != null) {
       setState(() {
         _entries = Map<String, List<String>>.from(
@@ -38,19 +39,20 @@ class _DiaryHomePageState extends State<DiaryHomePage> {
   }
 
   Future<void> _saveEntries() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setString('diary_entries', jsonEncode(_entries));
   }
 
   List<String> _getEntriesForDay(DateTime day) {
-    return _entries[day.toIso8601String().substring(0, 10)] ?? [];
+    final String key = day.toIso8601String().substring(0, 10);
+    return _entries[key] ?? [];
   }
 
   void _addEntry() {
-    String text = _textController.text.trim();
+    final String text = _textController.text.trim();
     if (text.isEmpty) return;
 
-    String key = _selectedDay.toIso8601String().substring(0, 10);
+    final String key = _selectedDay.toIso8601String().substring(0, 10);
     setState(() {
       if (_entries.containsKey(key)) {
         _entries[key]!.add(text);
@@ -64,7 +66,7 @@ class _DiaryHomePageState extends State<DiaryHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final entries = _getEntriesForDay(_selectedDay);
+    final List<String> entries = _getEntriesForDay(_selectedDay);
 
     return Scaffold(
       appBar: AppBar(
@@ -77,19 +79,20 @@ class _DiaryHomePageState extends State<DiaryHomePage> {
             lastDay: DateTime.utc(2100, 12, 31),
             focusedDay: _focusedDay,
             calendarFormat: _calendarFormat,
-            selectedDayPredicate: (day) {
-              return isSameDay(_selectedDay, day);
-            },
-            onDaySelected: (selectedDay, focusedDay) {
+            selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+            onDaySelected: (DateTime selectedDay, DateTime focusedDay) {
               setState(() {
                 _selectedDay = selectedDay;
                 _focusedDay = focusedDay;
               });
             },
-            onFormatChanged: (format) {
+            onFormatChanged: (CalendarFormat format) {
               setState(() {
                 _calendarFormat = format;
               });
+            },
+            onPageChanged: (DateTime focusedDay) {
+              _focusedDay = focusedDay;
             },
           ),
           const SizedBox(height: 8),
